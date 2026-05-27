@@ -2,15 +2,21 @@ import requests
 import os
 import json
 import csv
+import re
 import numpy as np
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+
+class UTF8JSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return json.dumps(content, ensure_ascii=False).encode('utf-8')
 
 load_dotenv()
 
 ESV_API_KEY = os.getenv("ESV_API_KEY")
-app = FastAPI()
+app = FastAPI(default_response_class=UTF8JSONResponse)
 
 # Load search engine on startup
 print("Loading search engine...")
@@ -79,6 +85,24 @@ for verse in cross_refs:
 
 print(f"Loaded cross references for {len(cross_refs)} verses!")
 
+# Load Strongs on startup
+print("Loading Strongs concordance...")
+
+def load_strongs():
+    with open('strongs-master/greek/strongs-greek-dictionary.js', 'r', encoding='utf-8') as f:
+        content = f.read()
+    match = re.search(r'=\s*({.*})', content, re.DOTALL)
+    greek = json.loads(match.group(1))
+    
+    with open('strongs-master/hebrew/strongs-hebrew-dictionary.js', 'r', encoding='utf-8') as f:
+        content = f.read()
+    match = re.search(r'=\s*({.*})', content, re.DOTALL)
+    hebrew = json.loads(match.group(1))
+    return greek, hebrew
+
+greek_dict, hebrew_dict = load_strongs()
+print(f"Loaded {len(greek_dict)} Greek and {len(hebrew_dict)} Hebrew words!")
+
 def get_passage(passage):
     url = "https://api.esv.org/v3/passage/text/"
     headers = {"Authorization": f"Token {ESV_API_KEY}"}
@@ -129,3 +153,28 @@ def search_endpoint(q: str):
 def cross_references_endpoint(q: str):
     refs = cross_refs.get(q, [])[:10]
     return {"verse": q, "cross_references": refs}
+
+@app.get("/strongs")
+def strongs_endpoint(id: str):
+    id = id.upper()
+    if id.startswith('G'):
+        entry = greek_dict.get(id)
+        language = "Greek"
+    elif id.startswith('H'):
+        entry = hebrew_dict.get(id)
+        language = "Hebrew"
+    else:
+        return {"error": "ID must start with G (Greek) or H (Hebrew)"}
+    
+    if not entry:
+        return {"error": f"No entry found for {id}"}
+    
+    return {
+        "id": id,
+        "language": language,
+        "lemma": entry.get('lemma', '').encode('utf-8').decode('utf-8'),
+        "transliteration": (entry.get('translit') or entry.get('xlit', '')).encode('utf-8').decode('utf-8'),
+        "pronunciation": entry.get('pron', ''),
+        "definition": entry.get('strongs_def', '').strip(),
+        "kjv_usage": entry.get('kjv_def', '')
+    }
