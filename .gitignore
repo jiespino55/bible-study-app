@@ -4,3 +4,5 @@ __pycache__/
 embeddings.npy
 verses.json
 bible_kjv.json
+cross_references.zip
+cross_references.txt
