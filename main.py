@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 class UTF8JSONResponse(JSONResponse):
     def render(self, content) -> bytes:
@@ -17,6 +18,13 @@ load_dotenv()
 
 ESV_API_KEY = os.getenv("ESV_API_KEY")
 app = FastAPI(default_response_class=UTF8JSONResponse)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load search engine on startup
 print("Loading search engine...")
