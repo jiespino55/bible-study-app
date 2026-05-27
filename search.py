@@ -1,30 +1,39 @@
-from sentence_transformers import SentenceTransformer
+import json
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
+# Load everything
+print("Loading...")
 model = SentenceTransformer('all-MiniLM-L6-v2')
+embeddings = np.load('embeddings.npy')
+with open('verses.json', 'r') as f:
+    verses = json.load(f)
+print("Ready!")
 
-def similarity(a, b):
-    # Cosine similarity - measures how similar two meanings are
-    # Returns a number between 0 and 1, where 1 is identical meaning
-    a = np.array(a)
-    b = np.array(b)
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+def search(query, top_k=5):
+    query_embedding = model.encode(query)
+    
+    # Calculate similarity between query and all verses
+    similarities = np.dot(embeddings, query_embedding) / (
+        np.linalg.norm(embeddings, axis=1) * np.linalg.norm(query_embedding)
+    )
+    
+    # Get top results
+    top_indices = np.argsort(similarities)[::-1][:top_k]
+    
+    results = []
+    for idx in top_indices:
+        results.append({
+            "reference": verses[idx]['reference'],
+            "text": verses[idx]['text'],
+            "score": float(similarities[idx])
+        })
+    
+    return results
 
-verses = [
-    "For God so loved the world that he gave his only Son",
-    "Love your neighbor as yourself",
-    "The Lord is my shepherd, I shall not want",
-    "God is love",
-    "In the beginning God created the heavens and the earth",
-]
-
-query = "God loves us"
-
-query_embedding = model.encode(query)
-verse_embeddings = model.encode(verses)
-
-print(f"Query: '{query}'\n")
-print("Similarity scores:")
-for i, verse in enumerate(verses):
-    score = similarity(query_embedding, verse_embeddings[i])
-    print(f"{score:.3f} - {verse}")
+# Test it
+results = search("the armor of God")
+print("\nResults for 'the armor of God':")
+for r in results:
+    print(f"\n{r['reference']} (score: {r['score']:.3f})")
+    print(f"{r['text']}")
