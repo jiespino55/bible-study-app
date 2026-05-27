@@ -2,7 +2,7 @@ import requests
 import os
 import json
 import csv
-import re
+import re 
 import numpy as np
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -153,9 +153,101 @@ def search_verses(query, top_k=5):
 def passage_endpoint(q: str):
     return get_passage(q)
 
+BOOK_ALIASES = {
+    # Old Testament
+    'gen': 'Genesis', 'ex': 'Exodus', 'exod': 'Exodus',
+    'lev': 'Leviticus', 'num': 'Numbers', 'deut': 'Deuteronomy',
+    'josh': 'Joshua', 'judg': 'Judges', 'ru': 'Ruth',
+    '1sam': '1 Samuel', '2sam': '2 Samuel',
+    '1ki': '1 Kings', '1kgs': '1 Kings', '2ki': '2 Kings', '2kgs': '2 Kings',
+    '1chr': '1 Chronicles', '2chr': '2 Chronicles',
+    'ezr': 'Ezra', 'neh': 'Nehemiah', 'esth': 'Esther',
+    'ps': 'Psalms', 'psa': 'Psalms', 'pss': 'Psalms',
+    'prov': 'Proverbs', 'pro': 'Proverbs',
+    'eccl': 'Ecclesiastes', 'ecc': 'Ecclesiastes',
+    'song': 'Song of Solomon', 'sos': 'Song of Solomon',
+    'isa': 'Isaiah', 'jer': 'Jeremiah', 'lam': 'Lamentations',
+    'ezek': 'Ezekiel', 'eze': 'Ezekiel',
+    'dan': 'Daniel', 'hos': 'Hosea',
+    'obad': 'Obadiah', 'ob': 'Obadiah',
+    'jon': 'Jonah', 'jnh': 'Jonah',
+    'mic': 'Micah', 'nah': 'Nahum', 'hab': 'Habakkuk',
+    'zeph': 'Zephaniah', 'zep': 'Zephaniah',
+    'hag': 'Haggai', 'zech': 'Zechariah', 'zec': 'Zechariah',
+    'mal': 'Malachi',
+    # New Testament
+    'matt': 'Matthew', 'mat': 'Matthew', 'mt': 'Matthew',
+    'mk': 'Mark', 'mr': 'Mark',
+    'lk': 'Luke', 'lu': 'Luke',
+    'jn': 'John', 'jhn': 'John', 'jo': 'John',
+    'ac': 'Acts',
+    'rom': 'Romans', 'ro': 'Romans',
+    '1cor': '1 Corinthians', '1co': '1 Corinthians',
+    '2cor': '2 Corinthians', '2co': '2 Corinthians',
+    'gal': 'Galatians', 'ga': 'Galatians',
+    'eph': 'Ephesians',
+    'phil': 'Philippians', 'php': 'Philippians',
+    'col': 'Colossians',
+    '1thess': '1 Thessalonians', '1th': '1 Thessalonians',
+    '2thess': '2 Thessalonians', '2th': '2 Thessalonians',
+    '1tim': '1 Timothy', '1ti': '1 Timothy',
+    '2tim': '2 Timothy', '2ti': '2 Timothy',
+    'tit': 'Titus',
+    'phlm': 'Philemon', 'phm': 'Philemon',
+    'heb': 'Hebrews',
+    'jas': 'James', 'jam': 'James',
+    '1pet': '1 Peter', '1pe': '1 Peter',
+    '2pet': '2 Peter', '2pe': '2 Peter',
+    '1jn': '1 John', '1jo': '1 John',
+    '2jn': '2 John', '2jo': '2 John',
+    '3jn': '3 John', '3jo': '3 John',
+    'jud': 'Jude',
+    'rev': 'Revelation', 're': 'Revelation',
+}
+
+def normalize_reference(query):
+    query = query.strip()
+    # Match optional leading number, book name, then chapter:verse
+    match = re.match(r'^(\d\s?)?([a-zA-Z]+)\.?\s*(\d+)?(\:\d+(-\d+)?)?$', query)
+    if not match:
+        return query
+    
+    prefix = (match.group(1) or '').strip()
+    book = match.group(2).lower()
+    chapter_verse = (match.group(3) or '') + (match.group(4) or '')
+    
+    # Build lookup key
+    key = (prefix + book).replace(' ', '') if prefix else book
+    
+    full_book = BOOK_ALIASES.get(key) or BOOK_ALIASES.get(book)
+    if not full_book:
+        return query
+    
+    if chapter_verse:
+        return f"{full_book} {chapter_verse}"
+    return full_book
+
+def is_bible_reference(query):
+    # Matches patterns like "John 3:16", "Romans 8", "1 Corinthians 13:4-7"
+    pattern = r'^(\d\s)?[a-zA-Z]+\.?\s+\d+(\:\d+(-\d+)?)?$'
+    return bool(re.match(pattern, query.strip()))
+
 @app.get("/search")
 def search_endpoint(q: str):
-    return {"query": q, "results": search_verses(q)}
+    normalized = normalize_reference(q)
+    if is_bible_reference(normalized):
+        passage = get_passage(normalized)
+        return {
+            "query": q,
+            "type": "passage",
+            "results": [{"reference": passage["reference"], "text": passage["text"], "score": 1.0}]
+        }
+    else:
+        return {
+            "query": q,
+            "type": "search",
+            "results": search_verses(q)
+        }
 
 @app.get("/crossreferences")
 def cross_references_endpoint(q: str):
