@@ -1,3 +1,4 @@
+import anthropic
 import requests
 import os
 import json
@@ -15,6 +16,9 @@ class UTF8JSONResponse(JSONResponse):
         return json.dumps(content, ensure_ascii=False).encode('utf-8')
 
 load_dotenv()
+
+# Load Anthropic client
+anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 ESV_API_KEY = os.getenv("ESV_API_KEY")
 app = FastAPI(default_response_class=UTF8JSONResponse)
@@ -278,3 +282,53 @@ def strongs_endpoint(id: str):
         "definition": entry.get('strongs_def', '').strip(),
         "kjv_usage": entry.get('kjv_def', '')
     }
+
+@app.get("/assistant")
+def assistant_endpoint(q: str, verse: str = ""):
+    # If a verse is selected, fetch its cross references to give the AI context
+    context_refs = []
+    context_passage = ""
+    
+    if verse:
+        # Get the passage text
+        passage_data = get_passage(verse)
+        context_passage = f"{passage_data['reference']}: {passage_data['text']}"
+        
+        # Get cross references
+        refs = cross_refs.get(verse, [])[:5]
+        for ref in refs:
+            ref_data = get_passage(ref['reference'])
+            context_refs.append(f"{ref_data['reference']}: {ref_data['text']}")
+    
+    # Build the context string
+    context = ""
+    if context_passage:
+        context += f"\nSelected verse:\n{context_passage}\n"
+    if context_refs:
+        context += f"\nRelated verses:\n" + "\n".join(context_refs)
+    
+    system_prompt = """You are a Bible study research assistant. Your role is to help users explore and understand scripture by presenting what the data, history, and scholarship says — never by giving your own theological conclusions or taking doctrinal positions.
+
+Your guidelines:
+- Present information from multiple perspectives when there is disagreement
+- Always cite scripture references when relevant
+- For historical questions, provide historical context and facts
+- For doctrinal debates, present what each side believes and their supporting verses — never pick a side
+- For pastoral questions, surface relevant scripture and commentary themes
+- Never say "I believe", "I think", or give a personal theological opinion
+- End responses by pointing the user toward the data: suggest related passages, topics, or questions they can explore further
+- Keep responses concise and organized
+- You are a librarian, not a theologian"""
+
+    user_message = f"{context}\n\nUser question: {q}" if context else q
+
+    message = anthropic_client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=[
+            {"role": "user", "content": user_message}
+        ]
+    )
+    
+    return {"response": message.content[0].text}
