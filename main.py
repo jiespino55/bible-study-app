@@ -332,3 +332,72 @@ Your guidelines:
     )
     
     return {"response": message.content[0].text}
+
+@app.get("/keywords")
+def keywords_endpoint(reference: str):
+    # Determine testament from book name
+    nt_books = [
+        "Matthew", "Mark", "Luke", "John", "Acts", "Romans",
+        "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
+        "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians",
+        "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews",
+        "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John",
+        "Jude", "Revelation"
+    ]
+    
+    book = ' '.join(reference.split()[:-1])
+    is_nt = book in nt_books
+    dictionary = greek_dict if is_nt else hebrew_dict
+    language = "Greek" if is_nt else "Hebrew"
+    
+    # Get the verse text
+    passage_data = get_passage(reference)
+    verse_text = passage_data['text'].lower()
+    
+    # Key theological words to look for
+    greek_keywords = {
+        "love": "G26", "grace": "G5485", "faith": "G4102",
+        "hope": "G1680", "peace": "G1515", "joy": "G5479",
+        "spirit": "G4151", "truth": "G225", "life": "G2222",
+        "light": "G5457", "word": "G3056", "god": "G2316",
+        "lord": "G2962", "christ": "G5547", "jesus": "G2424",
+        "sin": "G266", "salvation": "G4991", "righteousness": "G1343",
+        "mercy": "G1656", "glory": "G1391", "power": "G1411",
+        "prayer": "G4335", "believe": "G4100", "heart": "G2588",
+        "soul": "G5590", "eternal": "G166", "kingdom": "G932",
+        "forgive": "G863", "holy": "G40", "wisdom": "G4678"
+    }
+    
+    hebrew_keywords = {
+        "love": "H157", "grace": "H2580", "faith": "H530",
+        "hope": "H8615", "peace": "H7965", "joy": "H8342",
+        "spirit": "H7307", "truth": "H571", "life": "H2416",
+        "light": "H216", "word": "H1697", "god": "H430",
+        "lord": "H3068", "sin": "H2403", "salvation": "H3444",
+        "righteousness": "H6666", "mercy": "H2617", "glory": "H3519",
+        "power": "H3581", "heart": "H3820", "soul": "H5315",
+        "holy": "H6944", "wisdom": "H2451", "fear": "H3374",
+        "covenant": "H1285", "praise": "H1984", "blessed": "H835"
+    }
+    
+    keywords = greek_keywords if is_nt else hebrew_keywords
+    found = []
+    
+    for word, strongs_id in keywords.items():
+        if word in verse_text:
+            entry = dictionary.get(strongs_id)
+            if entry:
+                found.append({
+                    "word": word,
+                    "strongs_id": strongs_id,
+                    "language": language,
+                    "lemma": entry.get('lemma', ''),
+                    "transliteration": entry.get('translit') or entry.get('xlit', ''),
+                    "definition": entry.get('strongs_def', '').strip()
+                })
+    
+    return {
+        "reference": reference,
+        "language": language,
+        "keywords": found
+    }
