@@ -33,36 +33,20 @@ def setup_data_files():
             f.write(r.content)
         print("Bible data downloaded!")
 
-    # Generate embeddings if not present
-    if not Path('verses.json').exists() or not Path('embeddings.npy').exists():
-        print("Generating embeddings - this will take a few minutes...")
-        import re as re_module
-        
-        with open('bible_kjv.json', 'r', encoding='utf-8-sig') as f:
-            bible = json.load(f)
-        
-        def clean_verse(text):
-            text = re_module.sub(r'\{[^}]*\}', '', text)
-            return ' '.join(text.split()).strip()
-        
-        verses_data = []
-        for book in bible:
-            for ch_num, chapter in enumerate(book['chapters'], 1):
-                for v_num, verse_text in enumerate(chapter, 1):
-                    verses_data.append({
-                        "reference": f"{book['name']} {ch_num}:{v_num}",
-                        "text": clean_verse(verse_text)
-                    })
-        
-        with open('verses.json', 'w') as f:
-            json.dump(verses_data, f)
-        
-        from sentence_transformers import SentenceTransformer
-        embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-        texts = [v['text'] for v in verses_data]
-        embeddings_data = embed_model.encode(texts, show_progress_bar=True, batch_size=64)
-        np.save('embeddings.npy', embeddings_data)
-        print("Embeddings generated!")
+    # Download pre-generated embeddings and verses from Hugging Face
+    if not Path('embeddings.npy').exists():
+        print("Downloading embeddings from Hugging Face...")
+        r = requests.get('https://huggingface.co/datasets/jiespino/bible-study-data/resolve/main/embeddings.npy')
+        with open('embeddings.npy', 'wb') as f:
+            f.write(r.content)
+        print("Embeddings downloaded!")
+
+    if not Path('verses.json').exists():
+        print("Downloading verses from Hugging Face...")
+        r = requests.get('https://huggingface.co/datasets/jiespino/bible-study-data/resolve/main/verses.json')
+        with open('verses.json', 'wb') as f:
+            f.write(r.content)
+        print("Verses downloaded!")
 
 setup_data_files()
 
