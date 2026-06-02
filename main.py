@@ -62,9 +62,14 @@ anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 ESV_API_KEY = os.getenv("ESV_API_KEY")
 app = FastAPI(default_response_class=UTF8JSONResponse)
 
+origins = [
+    "http://localhost:3000",
+    "https://bible-study-frontend-y2ib.onrender.com",  # your actual frontend URL
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
