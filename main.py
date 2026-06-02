@@ -7,10 +7,10 @@ import re
 import numpy as np
 import zipfile
 import io
+import google.generativeai as genai
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -58,6 +58,8 @@ load_dotenv()
 
 # Load Anthropic client
 anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+genai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
 
 ESV_API_KEY = os.getenv("ESV_API_KEY")
 app = FastAPI(default_response_class=UTF8JSONResponse)
@@ -71,11 +73,19 @@ app.add_middleware(
 
 # Load search engine on startup
 print("Loading search engine...")
-model = SentenceTransformer('all-MiniLM-L6-v2')
 embeddings = np.load('embeddings.npy')
 with open('verses.json', 'r') as f:
     verses = json.load(f)
 print("Search engine ready!")
+
+_model = None
+
+def get_query_embedding(query):
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _model.encode(query)
 
 # Load cross references on startup
 print("Loading cross references...")
@@ -178,7 +188,7 @@ def get_passage(passage):
     }
 
 def search_verses(query, top_k=5):
-    query_embedding = model.encode(query)
+    query_embedding = get_query_embedding(query)
     similarities = np.dot(embeddings, query_embedding) / (
         np.linalg.norm(embeddings, axis=1) * np.linalg.norm(query_embedding)
     )
