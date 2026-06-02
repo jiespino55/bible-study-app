@@ -4,5 +4,4 @@ requests
 python-dotenv
 numpy
 anthropic
-google-generativeai
 sentence-transformers

@@ -7,7 +7,6 @@ import re
 import numpy as np
 import zipfile
 import io
-import google.generativeai as genai
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -58,7 +57,6 @@ load_dotenv()
 
 # Load Anthropic client
 anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-genai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 
 ESV_API_KEY = os.getenv("ESV_API_KEY")
