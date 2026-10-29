@@ -42,6 +42,32 @@ const CHAPTER_COUNTS = {
   "2 John": 1, "3 John": 1, "Jude": 1, "Revelation": 22
 };
 
+/* ---- Line icons (inline SVG, no dependencies) ---- */
+const Icon = ({ children }) => (
+  <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{children}</svg>
+);
+const SearchIcon = () => (
+  <Icon><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Icon>
+);
+const SidebarIcon = () => (
+  <Icon><rect x="3" y="4" width="18" height="16" rx="3" /><line x1="15" y1="4" x2="15" y2="20" /></Icon>
+);
+const SparkleIcon = () => (
+  <Icon><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /></Icon>
+);
+const ChevronDownIcon = () => (
+  <Icon><polyline points="6 9 12 15 18 9" /></Icon>
+);
+const ChevronLeftIcon = () => (
+  <Icon><polyline points="15 18 9 12 15 6" /></Icon>
+);
+const ChevronRightIcon = () => (
+  <Icon><polyline points="9 18 15 12 9 6" /></Icon>
+);
+const ArrowUpIcon = () => (
+  <Icon><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></Icon>
+);
+
 function App() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
@@ -60,9 +86,17 @@ function App() {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [conversation, setConversation] = useState([]);
   const [leftWidth, setLeftWidth] = useState(60);
+
+  // UI visibility
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [rightOpen, setRightOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(true);
+
   const isDragging = useRef(false);
   const containerRef = useRef(null);
   const conversationEndRef = useRef(null);
+  const headerRef = useRef(null);
+  const searchInputRef = useRef(null);
   const API_BASE = "https://bible-study-backend-m0b6.onrender.com";
 
   useEffect(() => {
@@ -71,7 +105,30 @@ function App() {
     }
   }, [conversation]);
 
-  const handleMouseDown = () => { isDragging.current = true; };
+  /* ---- Search: focus on open, close on Escape / click outside ---- */
+  useEffect(() => {
+    if (!searchOpen) return;
+    const focusTimer = setTimeout(() => searchInputRef.current?.focus(), 60);
+
+    const onKey = (e) => { if (e.key === 'Escape') setSearchOpen(false); };
+    const onClickOutside = (e) => {
+      if (headerRef.current && !headerRef.current.contains(e.target)) setSearchOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onClickOutside);
+    return () => {
+      clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onClickOutside);
+    };
+  }, [searchOpen]);
+
+  /* ---- Draggable divider ---- */
+  const handleMouseDown = () => {
+    isDragging.current = true;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  };
 
   const handleMouseMove = useCallback((e) => {
     if (!isDragging.current || !containerRef.current) return;
@@ -80,7 +137,11 @@ function App() {
     if (newLeft >= 25 && newLeft <= 75) setLeftWidth(newLeft);
   }, []);
 
-  const handleMouseUp = () => { isDragging.current = false; };
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  };
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);
@@ -93,6 +154,7 @@ function App() {
 
   const handleSearch = async () => {
     if (!query.trim()) return;
+    setSearchOpen(false);
     const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
     const data = await response.json();
     setResults(data);
@@ -135,6 +197,7 @@ function App() {
 
   const handleVerseClick = async (verse) => {
     setSelectedVerse(verse);
+    setRightOpen(true); // reveal the sidebar when a verse is selected
     setExpandedRef(null);
     setLoading(true);
     setKeywords([]);
@@ -176,10 +239,31 @@ function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <h1>Bible Study</h1>
+      <header className={`header ${searchOpen ? 'search-open' : ''}`} ref={headerRef}>
+        <h1 onClick={() => setMode('home')}>Bible Study</h1>
+
+        <div className="header-actions">
+          <button
+            className={`icon-btn ${searchOpen ? 'active' : ''}`}
+            onClick={() => setSearchOpen(o => !o)}
+            aria-label="Search"
+            title="Search"
+          >
+            <SearchIcon />
+          </button>
+          <button
+            className={`icon-btn ${rightOpen ? 'active' : ''}`}
+            onClick={() => setRightOpen(o => !o)}
+            aria-label={rightOpen ? 'Hide study panel' : 'Show study panel'}
+            title={rightOpen ? 'Hide study panel' : 'Show study panel'}
+          >
+            <SidebarIcon />
+          </button>
+        </div>
+
         <div className="search-bar">
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search by passage or topic..."
             value={query}
@@ -190,7 +274,7 @@ function App() {
         </div>
       </header>
 
-      <div className="panels" ref={containerRef}>
+      <div className={`panels ${rightOpen ? '' : 'right-collapsed'}`} ref={containerRef}>
         <div className="left-panel" style={{ width: `${leftWidth}%` }}>
 
           {mode === 'home' && (
@@ -249,9 +333,13 @@ function App() {
                 </p>
               ))}
               <div className="chapter-nav">
-                <button onClick={() => selectedChapter > 1 && handleChapterClick(selectedChapter - 1)} disabled={selectedChapter <= 1}>← Previous</button>
+                <button onClick={() => selectedChapter > 1 && handleChapterClick(selectedChapter - 1)} disabled={selectedChapter <= 1}>
+                  <ChevronLeftIcon /> Previous
+                </button>
                 <span>{selectedBook} {selectedChapter}</span>
-                <button onClick={() => selectedChapter < CHAPTER_COUNTS[selectedBook] && handleChapterClick(selectedChapter + 1)} disabled={selectedChapter >= CHAPTER_COUNTS[selectedBook]}>Next →</button>
+                <button onClick={() => selectedChapter < CHAPTER_COUNTS[selectedBook] && handleChapterClick(selectedChapter + 1)} disabled={selectedChapter >= CHAPTER_COUNTS[selectedBook]}>
+                  Next <ChevronRightIcon />
+                </button>
               </div>
             </div>
           )}
@@ -280,7 +368,7 @@ function App() {
                         if (chapterMatch) handleChapterClick(parseInt(chapterMatch[2]), chapterMatch[1]);
                       }}
                     >
-                      Read chapter →
+                      Read chapter
                     </button>
                   </div>
                   <p>{verse.text}</p>
@@ -294,7 +382,7 @@ function App() {
 
         <div className="right-panel" style={{ width: `${100 - leftWidth}%` }}>
           {selectedVerse && (
-            <div>
+            <div className="verse-details">
               <div className="selected-verse">
                 <h2>{selectedVerse.reference}</h2>
                 <p>{selectedVerse.text}</p>
@@ -340,13 +428,14 @@ function App() {
             <p className="placeholder">Select a verse to see cross references and original language keywords.</p>
           )}
 
-          <div className="assistant-section">
-            <div className="assistant-header">
-              <div className="assistant-icon">✦</div>
+          <div className={`assistant-section ${assistantOpen ? '' : 'collapsed'}`}>
+            <div className="assistant-header" onClick={() => setAssistantOpen(o => !o)}>
+              <div className="assistant-icon"><SparkleIcon /></div>
               <div>
                 <h3>Study Assistant</h3>
                 <p>Ask anything about this verse or any biblical topic</p>
               </div>
+              <span className="chevron"><ChevronDownIcon /></span>
             </div>
 
             <div className="conversation">
@@ -381,7 +470,7 @@ function App() {
                 onChange={(e) => setAssistantQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAssistantQuery()}
               />
-              <button onClick={handleAssistantQuery}>→</button>
+              <button onClick={handleAssistantQuery} aria-label="Send"><ArrowUpIcon /></button>
             </div>
           </div>
         </div>
